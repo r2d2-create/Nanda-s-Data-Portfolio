@@ -1,0 +1,160 @@
+---
+title: "Homework 4"
+author: "Nanda"
+date: '`r format(Sys.time(), "%Y-%m-%d")`'
+output: 
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+library(data.table)
+library(tidyverse)
+library(ggrepel)
+
+library(devtools)
+
+library(rnoaa)
+
+library(readxl)
+library(janitor)
+library(dplyr)
+library(tidyr)
+library(stringr)
+
+knitr::opts_chunk$set(fig.width = 16, fig.height = 9)
+#Anything else you want to do here?
+```
+
+# Points
+
+| Problem                        | Points |  
+|:-------------------------------|:------|  
+| Style and Replicability        | 2     |  
+| Question 1                     | 8     |  
+| Question 2                     | 8     |  
+| Total                          | 18    |
+
+# Overview 
+
+The data are sourced from [here](https://unfccc.int/topics/mitigation/resources/registry-and-data/ghg-data-from-unfccc); they describe the total greenhouse gas emissions incorporating LULUCF (land use, land-use change and forestry) per country per year in kilotons of carbon dioxide equivalent. The first question uses a time-series across countries, and the second question describes different categories within USA emissions. Both datasets span 1990 to 2020. You will read in the data, reshape it, and then plot.
+
+# Question 1
+
+The first dataset is a time series across multiple countries, sourced from [this](https://di.unfccc.int/time_series?_gl=1*lvd5jh*_ga*MTk3NzU3NTI5NS4xNjk1NTEwOTM1*_ga_7ZZWT14N79*MTY5NTU2ODI5Mi4zLjAuMTY5NTU2ODI5Mi4wLjAuMA..) subdirectory. 
+
+Import the `ghg_total_lulucf_ktco2.xlsx` dataset from the Class 4 Resources tab on Brightspace and load it here. Run `clean_names` as usual and then reshape the dataset. After you reshape, you can use the line `mutate(year = as.numeric(str_replace(year, "x","")))` to remove the leading `x` from your year values, and convert the year variable to a numeric as well; this will help you in your plotting. 
+
+## Import and Cleaning
+
+```{r}
+ghg_total <-
+   read_excel(
+    "/Users/-n/Desktop/R files/ghg_total_lulucf_ktco2.xlsx") |>
+  janitor::clean_names()
+
+head(ghg_total, 10)
+
+ghg_pivot_long <- 
+ghg_total |> 
+  pivot_longer(
+    x1990:x2020,
+    names_to = "year",
+    values_to = "year_value") |>
+  mutate(year = as.numeric(str_replace(year, "x",""))) 
+
+ghg_pivot_long$year <- as.numeric(ghg_pivot_long$year)
+  
+is.numeric(ghg_pivot_long$year)
+
+#OR
+
+class(ghg_pivot_long$year)
+
+head(ghg_pivot_long)
+```
+
+## Plot
+
+Now, recreate the plot below using `ggplot`. 
+
+This plot uses the dataframe imported above. The color corresponds to the `party` and there are both line and scatter layers. I label the axes and add a title and caption, as well as scaling the `x` and `y`-axis, and the theme is minimal with the legend at the bottom. I've adjusted the legend title too.
+
+```{r, warning=FALSE}
+
+  ggplot(data = ghg_pivot_long, aes(x = year, y = year_value, color = party)) + 
+  geom_point() + 
+  geom_line() +
+  labs(
+    title = "Greenhouse Gas Emissions by Country, 1990−2020",
+    x = "Year",
+    y = "Greenhouse Gas Emissions (kt)",
+    caption = "Note: GHG are in kilotons of CO2 equivalent, including LULUCF"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  scale_x_continuous(limits = c(1990, 2020), breaks = c(seq(from = 1990, to = 2020, by = 1))) +
+  scale_y_continuous(limits = c(0, 7000000),breaks=c(seq(from = 0, to = 7000000, by = 500000)))
+
+```
+
+## Question 2
+
+This second dataset is a time series focusing on the USA, sourced from [this](https://di.unfccc.int/detailed_data_by_party) subdirectory. 
+
+Much like the first question, import the `ghg_usa_lulucf_ktco2.xlsx` dataset from the Class 4 Resources tab on Brightspace and load it here. You can run the same cleaning process: Run `clean_names` as usual and then reshape the dataset. Similarly, after you reshape, you can use the line `mutate(year = as.numeric(str_replace(year, "x","")))` to remove the leading `x` from your year values, and convert the year variable to a numeric as well. 
+
+Then, recreate the plot below using `ggplot`. 
+
+## Import
+
+Data are imported and cleaned here.
+
+```{r}
+ghg_usa <-
+   read_excel(
+    "/Users/-n/Desktop/R files/ghg_usa_lulucf_ktco2.xlsx") |>
+  janitor::clean_names()
+
+head(ghg_usa)
+
+ghg_usa_pivot_long <- 
+ghg_usa |> 
+  pivot_longer(
+    x1990:x2020,
+    names_to = "year",
+    values_to = "year_value") |>
+  mutate(year = as.numeric(str_replace(year, "x",""))) 
+
+ghg_usa_pivot_long$year <- as.numeric(ghg_usa_pivot_long$year)
+  
+is.numeric(ghg_usa_pivot_long$year)
+
+#OR
+
+class(ghg_usa_pivot_long$year)
+
+head(ghg_usa_pivot_long)
+```
+
+## Plot
+
+This plot uses the dataframe you just imported. The `color` is set to a `category` variable, there's a scatter layer as well as a `geom_smooth`, and I label several elements too. I also cale the x-axis, set the theme to minimal, adjust the legend title, and facet over/across the `category` variable while permitting the scales to vary.
+
+```{r}
+  ggplot(data = ghg_usa_pivot_long, aes(x = year, y = year_value, color = category)) + 
+  geom_point(alpha = 0.5) + 
+  geom_smooth(se = TRUE) +
+  labs(
+    title = "Greenhouse Gas Emissions, USA, 1990−2020",
+    x = "Year",
+    y = "Greenhouse Gas Emissions (kt)",
+    caption = "Note: GHG are in kilotons of CO2 equivalent, including LULUCF"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  scale_x_continuous(limits = c(1990, 2020), breaks = c(seq(1990, 2020, 5))) +
+  scale_y_continuous() +
+  facet_wrap(~ category, scales = "free")
+  
+```
