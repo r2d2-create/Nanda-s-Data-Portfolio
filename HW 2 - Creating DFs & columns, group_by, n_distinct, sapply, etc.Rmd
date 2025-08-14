@@ -1,0 +1,200 @@
+---
+title: "HW2"
+author: "Nanda"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  results = 'markup',
+  tidy.opts = list(width.cutoff = 100), 
+  tidy = TRUE
+)
+library(tidyverse)
+```
+
+## Titanic Survivorship Data
+
+Answer the questions below using R code and Markdown formatting. The first code chunk below loads the data you'll need to use. Data definitions are available at <https://www.kaggle.com/c/titanic/data> if you want them (note that some columns are not named exactly the same in the Kaggle version, and the version of the data you'll be using does not have Cabin number or Port of Embarkation).
+
+If you want to, you can change the variable names of `titanic` by adding the code "titanic = titanic %\>% janitor::clean_names()" right after the import if you want, but you will not be penalized for using the naming convention of existing variables directly from the import. You will need to have run "install.packages("janitor)" first if you never have. Please use snake_case or a similar choice for anything you use.
+
+| Problem                 | Points |
+|:------------------------|:-------|
+| Style and Replicability | 2      |
+| Question 1              | 2      |
+| Question 2              | 2      |
+| Question 3              | 2      |
+| Question 4              | 2      |
+| Question 5              | 2      |
+| Question 6              | 2      |
+| Question 7              | 2      |
+| Question 8              | 2      |
+| Total                   | 18     |
+
+```{r load_data}
+titanic  <- read.csv("https://web.stanford.edu/class/archive/cs/cs109/cs109.1166/stuff/titanic.csv")
+```
+
+### 1. Create a new column, with_family, that indicates whether a passenger had any family onboard (i.e., either siblings/spouses or parents/children) - 1 if yes, 0 if no
+
+```{r q1}
+family_df <- 
+  #Creating a dataframe called family_df with ALL columns from titanic, plus a with_family column
+  titanic |>
+  mutate(with_family = if_else(Siblings.Spouses.Aboard > 0 | Parents.Children.Aboard > 0, 1, 0)) #specifying the conditions in Q1
+view(family_df)
+
+#ALTERNATE METHOD:
+
+#family_df <- titanic[c("Siblings.Spouses.Aboard", "Parents.Children.Aboard")]
+#family_df$with_family <- ifelse(family_df$Siblings.Spouses.Aboard > 0 | family_df$Parents.Children.Aboard > 0, 1, 0)
+#view(family_df)
+
+```
+
+### 2. Create a new column, is_minor, that indicates whether a passenger is younger than 18 years old - 1 if yes, 0 if no
+
+```{r q2}
+age_df <- 
+  #Creating a dataframe called age_df with ALL columns from titanic, plus an is_minor column
+  titanic |>
+  mutate(is_minor = if_else(Age < 18, 1, 0)) #specifying the conditions in Q2
+view(age_df)
+
+#ALTERNATE METHOD:
+
+#age_df <- titanic[c("Age")]
+#age_df$is_minor <- ifelse(age_df$Age < 18, 1, 0)
+#view(age_df)
+
+```
+
+### 3. What percentage of all passengers were 1) in first class? 2) had any family onboard? 3) were minors? What percentage of all passengers survived? Note that "Pclass" indicates the cabin class. - all conditions are separate
+
+```{r q3}
+# 1: Percentage of passengers who are first class
+  titanic |>
+  summarize(
+    proportion_is_first_class = sum(titanic$Pclass == 1)/n() * 100
+  ) 
+
+# 2: Percentage of passengers who had any family onboard
+  titanic |>
+  summarize(
+    proportion_family_onboard = sum(family_df$with_family == 1)/n() * 100
+  ) 
+
+# 3: Percentage of passengers who are minors 
+  titanic |>
+  summarize(
+    proportion_is_minor = sum(age_df$is_minor == 1)/n() * 100
+  )
+
+# 4: Percentage of everyone who survived
+  titanic |>
+  summarize(
+    proportion_of_survivors = sum(titanic$Survived == 1)/n() * 100
+  )
+  
+# percentage of first class passengers = 24.35%
+# percentage of passengers w family onboard = 39.91%
+# percentage of passengers who were minors = 14.66%
+# percentage of passengers who survived = 38.56%
+```
+
+### 4. Create and print a table showing the Name, Age, and Fare of the 5 passengers who paid the highest fares
+
+```{r q4}
+max_fares <- #creating a dataframe called max_fares
+  titanic |>
+  arrange(desc(Fare)) |> #so that observations are listed based on highest to lowest fare
+  select(Name, Age, Fare) #only selecting the name, age, and fare variables to be included in max_fares
+
+head(max_fares, 5) #only viewing first 5 observations in max_fares
+```
+
+### 5. Create and print a table that shows the number of passengers in each ticket class
+
+```{r q5}
+# grouping by Pclass
+passengers_per_class <-
+  titanic |>
+  group_by(Pclass) |> #groups data by the passenger class variable
+  summarize(Pclass_count=n()) #counts how many passengers there are in each passenger class group and creates a new column Pclass_count with those counts
+
+print(passengers_per_class)
+```
+
+### 6. Create and print a table that shows the oldest passengers in each ticket class (Include Name, Age, and PClass as columns)
+
+```{r q6}
+oldest_passengers <- 
+  titanic |>
+  group_by(Pclass) |>
+  filter(Age == max(Age)) |> #Filters to keep only the passengers with the maximum age within each passenger class
+  select(Name, Age, Pclass) |>
+  ungroup()
+
+head(oldest_passengers)
+```
+
+### 7. Does ticket class seem to affect survivorship rates? Print a table that supports your answer.
+
+```{r q7}
+#I will group_by(Pclass) and then find the survival rate percentage (# of survivors/n()) for each Pclass. 
+class_and_survivorship <-
+  titanic |>
+  group_by(Pclass) |>
+  summarize(
+    proportion_of_survivors = sum(Survived == 1)/n() * 100 
+    #creating a variable denoting the proportion in question
+  )
+
+head(class_and_survivorship)
+#The table shows how many passengers within a certain class survived / all passengers of a certain class. Unsurprisingly, passengers had the highest rates of survivorship (0.6296296) within the 1st class. 
+```
+
+### 8. Name one other variable in the dataframe that seems to affect surviorship rate. Why do you think this variable may have been associated with survivorship?
+
+```{r q8}
+sex_and_survivorship <-
+  titanic |>
+  group_by(Sex) |>
+  summarize(
+    proportion_of_survivors = sum(Survived == 1)/n() * 100
+  )
+
+sex_and_survivorship <- as.data.frame(sex_and_survivorship)
+
+head(sex_and_survivorship)
+
+#As I was going through the first 20 or so columns in the titanic data set, I noticed that more women survived while men did not. I then modified my code from Q7 to reflect Sex instead of Pclass. The table shows how many passengers within a certain sex survived / all passengers of a certain sex. For females: ~ 74.2% of all females on the Titanic survived. For males: ~ 19.0% of all males on the Titanic survived.
+
+# This data is consistent with my desk research from an article from National Institutes of Health, which shows that "Men stood back, while women and children were given priority to board the lifeboats" to be chivalrous. 
+```
+
+### Difficult Bonus 2 Points: How many families (defined as a group of people with the same last names) seem to have been on board? Add a column to the original table that assigns each passenger to a family.
+
+Hint: you can use `strsplit` with a `split = " "` argument to extract the last name of the Name variable. So, within an `sapply`, you can use `tail` on the `strsplit` to get just the last name. Using the third argument of `sapply`, you can provide additional options to `tail`.
+
+```{r bonus}
+families_by_surname <- 
+  titanic |>
+  mutate(
+    surname = sapply(strsplit(Name, " "), function(Name) tail(Name, 1))) |>
+  group_by(surname) |>
+  mutate(family_id = cur_group_id()) 
+#To assign each passenger to a family, I made a family ID. I looked up new functions for this since it is a bonus question. 
+
+# Count the number of families
+number_of_families <- n_distinct(families_by_surname$family_id)
+head(number_of_families)
+
+# To add column to the original table that assigns each passenger to a family: 
+view(families_by_surname)
+```
