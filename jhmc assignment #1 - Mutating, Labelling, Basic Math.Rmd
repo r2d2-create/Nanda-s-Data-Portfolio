@@ -1,0 +1,249 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-06-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## importing the May 2024 to May 2025 dataset
+
+```{r load_data}
+may_2024_to_2025  <- read.csv("/Users/-n/Downloads/May 2024 through May 2025 HRSN Data (1).csv") |>
+  janitor::clean_names()
+```
+
+## race: make a new column and put race based on OMB race definitions
+
+```{r may 24-25 dataset q1}
+may_omb_races <-
+  may_2024_to_2025 |>
+  mutate(
+    OMB_combined_race_and_ethnicity = case_when(
+      race == "White" & ethnic_background != "Hispanic or Latino" ~ "White",
+      race == "Black or African American" & ethnic_background != "Hispanic or Latino" ~ "Black or African American",
+      race == "Asian" ~ "Asian",
+      race == "White" & ethnic_background == "Hispanic or Latino" ~ "Hispanic/Latino",
+      race == "Black or African American" & ethnic_background == "Hispanic or Latino" ~ "Hispanic/Latino",
+      race == "American Indian or Alaska Native" ~ "American Indian or Alaska Native",
+      race == "Native Hawaiian or Other Pacific Islander" ~ "Native Hawaiian or Pacific Islander",
+      race == "Two or More Races" ~ "Two or More Races",
+      race == "Some Other Race" & ethnic_background == "Hispanic or Latino" ~ "Hispanic or Latino", 
+      race == "Some Other Race" & ethnic_background != "Hispanic or Latino" ~ "Some Other Race", 
+      race == "Unknown" & ethnic_background != "Hispanic or Latino" ~ "Unknown",
+      race == "Unknown" & ethnic_background == "Hispanic or Latino" ~ "Hispanic or Latino"
+    )
+  ) |>
+  select(race, OMB_combined_race_and_ethnicity)
+
+may_omb_races
+
+colnames(may_omb_races)
+```
+
+## find the 5 most common languages, then group the rest of the languages into "other"
+```{r may 24-25 dataset q2}
+most_common_languages <- 
+  may_2024_to_2025 |>
+  count(language, sort = TRUE) |>
+  slice_head(n = 5)
+
+most_common_languages
+
+may_2024_to_2025$language <- as.character(may_2024_to_2025$language)
+
+language_groupings <-
+  may_2024_to_2025 |>
+  mutate(preferred_language = case_when(
+    language == "English" ~ "Top 5 language", 
+    language == "Spanish" ~ "Top 5 language", 
+    language == "Chinese-Mandarin" ~ "Top 5 language", 
+    language == "Bengali" ~ "Top 5 language", 
+    language == "Korean" ~ "Top 5 language", 
+    TRUE ~ "Other"
+  )) |>
+  select(language, preferred_language)
+
+language_groupings
+```
+
+## group ages into different ranges (0 - 17, 18-24, 25-44, 45-61, 62-70, 71+)
+
+```{r}
+ages <- 
+  may_2024_to_2025 |>
+  mutate(age_ranges = case_when(
+    age >= 0 & age <= 17 ~ "0 - 17", 
+    age >= 18 & age <= 24 ~ "18 - 24", 
+    age >= 25 & age <= 44 ~ "25 - 44", 
+    age >= 45 & age <= 61 ~ "45 - 61", 
+    age >= 62 & age <= 70 ~ "62 - 70", 
+    age >= 71 ~ "71+" 
+  ))
+
+ages
+```
+
+## calculate the overall HRSN screening rate using Completed Assessment (6) column
+
+```{r}
+may_2024_to_2025 |>
+  summarize(
+  hrsn_screening_rate = sum(may_2024_to_2025$completed_assessment_6 == 1)/n() * 100
+  )
+```
+
+## calculate the overall Positive screening rate using Positive Assessment (6) and Completed Assessment (6) column - I did: (sum of completed assessments with "1" / sum of positive assessments with "1") times 100 to get the percentages 
+
+```{r}
+may_2024_to_2025 |>
+  summarize(
+  positive_screening_rate = sum(may_2024_to_2025$positive_assessment_6 == 1)/sum(may_2024_to_2025$completed_assessment_6 == 1)*100
+  )
+```
+
+## calculate the overall Dx Present rate using Dx Present and Positive Assessment (6) column - DID I DO THIS CORRECTLY OR DO I NEED TO ADJUST?
+
+```{r}
+may_2024_to_2025 |>
+  summarize(
+  dx_present_rate = sum(may_2024_to_2025$dx_present == 1)/sum(may_2024_to_2025$positive_assessment_6 == 1)*100
+  )
+```
+
+## calculate the CBO Referral rate using CBO Present and Positive Assessment (6) column - DID I DO THIS CORRECTLY OR DO I NEED TO ADJUST?
+
+```{r}
+may_2024_to_2025 |>
+  summarize(
+  cbo_referral_rate = sum(may_2024_to_2025$cbo_present == 1)/sum(may_2024_to_2025$positive_assessment_6 == 1)*100
+  )
+```
+
+## importing the June 12th dataset
+
+```{r}
+june_12 <- read_excel("/Users/-n/Downloads/6.12.2025_HRSN and Readmit Dataset for ND.xlsx") |>
+  janitor::clean_names()
+```
+
+```{r}
+june_omb_races <-
+  june_12 |>
+  mutate(
+    june_OMB_combined_race_and_ethnicity = case_when(
+      race == "White" & ethnic_background_final != "Hispanic or Latino" ~ "White",
+      race == "Black or African American" & ethnic_background_final != "Hispanic or Latino" ~ "Black or African American",
+      race == "Asian" ~ "Asian",
+      race == "White" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic/Latino",
+      race == "Black or African American" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic/Latino",
+      race == "American Indian or Alaska Native" ~ "American Indian or Alaska Native",
+      race == "Native Hawaiian or Other Pacific Islander" ~ "Native Hawaiian or Pacific Islander",
+      race == "Two or More Races" ~ "Two or More Races",
+      race == "Some Other Race" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic or Latino", 
+      race == "Some Other Race" & ethnic_background_final != "Hispanic or Latino" ~ "Some Other Race", 
+      race == "Unknown" & ethnic_background_final != "Hispanic or Latino" ~ "Unknown",
+      race == "Unknown" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic or Latino"
+    )
+  ) |>
+  select(race, june_OMB_combined_race_and_ethnicity)
+
+june_omb_races
+```
+
+## june insurance type
+
+```{r}
+df_june_insurance <-
+  june_12 |>
+  mutate(
+    june_insurance_types = case_when(
+      insurance_type == "HMO Medicaid" ~ "Medicaid", 
+      insurance_type == "Medicaid" ~ "Medicaid", 
+      insurance_type == "HMO Medicare" ~ "Medicare", 
+      insurance_type == "Medicare" ~ "Medicare", 
+      insurance_type == "Capitated Commercial" ~ "Commercial",
+      insurance_type == "Capitated Medicaid" ~ "Medicaid",
+      insurance_type == "Capitated Medicare" ~ "Medicare",
+      insurance_type == "Commercial" ~ "Commercial",
+      insurance_type == "Self-Pay" ~ "Other",
+      insurance_type == "Workers Comp/No Fault" ~ "Other",
+      insurance_type == "Other" ~ "Other"
+    )) |>
+  select(insurance_type, june_insurance_types)
+
+df_june_insurance
+```
+
+#june age ranges
+
+```{r}
+june_ages <- 
+  june_12 |>
+  mutate(june_age_ranges = case_when(
+    age >= 0 & age <= 17 ~ "0 - 17", 
+    age >= 18 & age <= 24 ~ "18 - 24", 
+    age >= 25 & age <= 44 ~ "25 - 44", 
+    age >= 45 & age <= 61 ~ "45 - 61", 
+    age >= 62 & age <= 70 ~ "62 - 70", 
+    age >= 71 ~ "71+" 
+  ))
+
+june_ages
+```
+
+## june hospital-service filters - WHAT DOES "ALL PATIENTS" REFERS TO?
+
+```{r}
+df_june_hospital_service <-
+  june_12 |>
+  mutate(
+    june_hs_filters = case_when(
+      hospital_service == "Surgery" ~ "Surgery Patient Only", 
+      hospital_service == "Ambulatory Surgery" ~ "Surgery Patient Only", 
+      hospital_service == "Cardiothoracic Surgery" ~ "Surgery Patient Only", 
+      hospital_service == "Hand Surgery" ~ "Surgery Patient Only", 
+      hospital_service == "Neurosurgery" ~ "Surgery Patient Only",
+      hospital_service == "Pediatric Surgery" ~ "Surgery Patient Only",
+      hospital_service == "Plastic Surgery" ~ "Surgery Patient Only",
+      hospital_service == "Thoracic Surgery" ~ "Surgery Patient Only",
+      hospital_service == "Vascular Surgery" ~ "Surgery Patient Only",
+      hospital_service == "Family Medicine" ~ "IM/FM Patients only",
+      hospital_service == "Internal Medicine" ~ "IM/FM Patients only"
+    )) |>
+  select(hospital_service, june_hs_filters)
+
+df_june_hospital_service
+```
+
+## can language groupings be automated (May)?
+
+```{r}
+most_common_languages <- 
+  may_2024_to_2025 |>
+  count(language, sort = TRUE) |>
+  slice_head(n = 5)
+
+comparison_of_languages <-
+  may_2024_to_2025 |>
+  mutate(preferred_language = if_else(
+    language %in% most_common_languages,
+    "Top 5 language",
+    "Other"
+  )) |>
+  select(language, preferred_language)
+
+comparison_of_languages
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
