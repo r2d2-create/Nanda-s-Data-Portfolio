@@ -1,0 +1,422 @@
+---
+title: "Assignment 5"
+author: "Nanda"
+date: "2025-03-12"
+output:
+  pdf_document:
+    latex_engine: xelatex
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(tinytex.verbose = TRUE)
+tidy.opts=list(width.cutoff=300)
+library(ggplot2)
+library(readr)
+library(viridis)
+library(dplyr)
+library(tidyverse)
+library(broom)
+library(kableExtra) 
+library(data.table)
+library(janitor)
+library(modelr)
+library(readxl)
+library(tinytex)
+library(webshot2)
+library(plotly)
+library(stringr)
+```
+
+Assignment 5 is more free-form than your previous assignments; as we have discussed, use the dataset you have found to conduct tidying and data quality checks. 
+
+Next, proceed into exploratory data analysis that combines a description of the dimensions and features of your data with a univariate visualization and/or table approach of your choice that shows the distributions of variables of interest. 
+
+Next, proceed to a multivariate approach that looks for relationships between and amongst variables of interest to you, related to your intended analysis. 
+
+Then, complete a multivariate linear regression analysis with two or more predictor variables in the model (continuous outcome). In special cases, you may pursue a logistic regression with a dichotomous outcome; email to establish this.
+
+When you are done, knit and submit a PDF file as well as your Rmd and dataset, as always. You are welcome to work with a partner on this assignment to find and understand a dataset, but you are to produce independent work products as always.
+
+More details on expectations for each section are detailed in-line below.
+
+Make sure your code is replicable; this script should run when you provide data to a grader. This includes submitting your data. Provide where you got the data and a link + instructions to where it can be found so that your work can be replicated; upload the dataset with your Assignment 5 submission.
+
+Remember your dataset should have a continuous outcome available, plus two other predictors, at least four columns total, and at least 500 rows/observations. 
+
+# Points
+
+| Problem                        | Points |  
+|:-------------------------------|:------|  
+| Style and Replicability        | 3     |  
+| EDA Data Cleaning and Quality Checks            | 3     |  
+| Uni+Multi                  | 6     |  
+| Regression                     | 6     |  
+| Total Points                   | 18    |  
+
+
+# Dataset
+
+Before starting, state your dataset of choice and which partner you collaborated with, if it all, when selecting this dataset.
+
+Write out here describing what you chose and why. State a motivating question and at least two subcomponent questions you have about the dataset and any related hypotheses.
+
+*Response:*
+
+I am using an energy benchmarking dataset from the NYC Mayor's Office. I downloaded it from NYC Open Data. 
+
+I worked with Weichen to select this dataset and pinpoint GHG emissions our outcome variable and source energy use as our shared predictor. From there on, we choose our own other predictors for our analysis. 
+
+Motivating policy question: Does the Energy Star Score meaningfully indicate a building’s total GHG emissions in NYC?
+
+Sub questions:
+
+1) Do buildings with lower Energy Star Scores consistently produce higher GHG emissions? Should NYC policymakers rely on Energy Star Scores when setting emissions-related regulations or incentives? As demonstrated, low scores doesn't necessarily mean higher emissions, and vice versa. I think policymakers should focus on different criteria when assessing a property's energy usage in the face of climate change as STAR scores don't focus on GHG emissions. 
+
+2) How do policy-relevant building categories (e.g., commercial vs. residential) compare in terms of Energy Star Scores and emissions? Commercial had the highest median STAR scores, but also the highest median quantity of emissions.
+
+# Dataset Import 
+
+```{r}
+energy_dataset <- 
+   read_excel("/Users/-n/Desktop/R files/full data_2.xlsx", 
+              col_types = c("text")) |>  # Prevents R Studio from crashing
+   janitor::clean_names()
+
+energy_dataset$postal_code <- gsub("-", "", energy_dataset$postal_code)
+```
+
+# Exploratory Data Analysis
+
+## Dimensions and more features of the data
+
+Run `summary`, `str()`, or other basic functions on your dataframe to get a sense of the number of rows and columns, what variables are of interest to you, and other primary features of the dataset.
+
+```{r}
+summary(energy_dataset) 
+str(energy_dataset)
+```
+
+# Data Quality Checks
+
+Insert as many chunks as you need to here, conducting your cleaning and data quality checks as discussed in Class 3. See slides 32 through 37: Now that you've stated your goal, examine generally whether there are problems with variable type agreement, duplicates, missing data, outliers, and other problems. 
+
+Be sure to check for at least three of the dimensions of data quality from Class 3's slide 37. Make a quick comment about each of the three (minimum).
+
+As you get more familiar with the dataset, be sure to also reshape it and/or remove excess if you need to for other visualization purposes. Be careful not to remove/dismiss anything that influences your EDA and regression analysis. Mold your clay.
+
+```{r}
+filtered_data <- 
+  energy_dataset |>
+  select(primary_property_type_self_selected, property_gfa_self_reported_ft, 
+         calendar_year, postal_code, borough, primary_property_type_self_selected,
+         energy_star_score, 
+         weather_normalized_source_energy_use_k_btu, 
+         natural_gas_use_k_btu, 
+        total_location_based_ghg_emissions_metric_tons_co2e, latitude, longitude) |>
+  filter(calendar_year == 2023) |> 
+  filter(str_detect(postal_code, "^\\d{5}$")) |> 
+  filter(total_location_based_ghg_emissions_metric_tons_co2e <= 52975) |>
+  filter(weather_normalized_source_energy_use_k_btu <= 1000000000) |>
+  filter(natural_gas_use_k_btu <= 700000000) |>
+  mutate(across(c(primary_property_type_self_selected, property_gfa_self_reported_ft, 
+                  postal_code, energy_star_score, 
+                  weather_normalized_source_energy_use_k_btu, 
+                  total_location_based_ghg_emissions_metric_tons_co2e,
+                  natural_gas_use_k_btu, 
+                  latitude, longitude), 
+                ~ na_if(., "Not Available"))) |> 
+  mutate(across(c(property_gfa_self_reported_ft, energy_star_score, 
+                  weather_normalized_source_energy_use_k_btu, 
+                  total_location_based_ghg_emissions_metric_tons_co2e,
+                  natural_gas_use_k_btu, 
+                  latitude, longitude), 
+                ~ parse_number(.))) |>
+  mutate(property_category = case_when(
+    primary_property_type_self_selected %in% c("Office", "Medical Office", "Hotel", "Supermarket/Grocery Store", 
+                                               "Retail Store", "Bowling Alley", "Strip Mall") ~ "Commercial",
+    primary_property_type_self_selected %in% c("Multifamily Housing", "Senior Living Community") ~ "Residential",
+    TRUE ~ "Other"
+  )) |> 
+  mutate(borough = str_to_title(borough)) |>
+  filter(!is.na(energy_star_score) & 
+         !is.na(weather_normalized_source_energy_use_k_btu) & 
+         !is.na(natural_gas_use_k_btu) & 
+         !is.na(latitude) & 
+         !is.na(longitude) &
+         !is.na(total_location_based_ghg_emissions_metric_tons_co2e) &
+         !is.na(postal_code) &
+         !is.na(borough) &
+         !is.na(property_gfa_self_reported_ft) &
+         !is.na(primary_property_type_self_selected))
+
+
+View(filtered_data)
+```
+
+## Univariate
+
+Include at least two univariate EDA approaches. Consider running tables and summaries and visualizing distributions. Write at least a sentence interpreting your findings from each of the two univariate approaches.
+
+```{r}
+cor_matrix <- 
+  cor(filtered_data[, c("energy_star_score", 
+                        "weather_normalized_source_energy_use_k_btu", 
+                        "natural_gas_use_k_btu", 
+                        "total_location_based_ghg_emissions_metric_tons_co2e", 
+                        "property_gfa_self_reported_ft")]) |> 
+  knitr::kable(
+              align = "cc", 
+              digits = 3) |> 
+  kable_styling()
+
+cor_matrix
+
+#I chose these variables because they have theoretical relationships with scores 
+#and emissions. However, the correlations suggest that while the variables have 
+#strong relationships with emissions, they have weak relationships with scores. 
+#This is surprising considering that scores factor in gross floor area (gfa), 
+#weather normalized source energy use, and the kind of source a property uses 
+#energy from (in this case, I am only using natural gas use since the other 
+#source types had too many missing data). 
+```
+
+```{r}
+scores_by_boro <- ggplot(filtered_data, aes(x = borough, y = energy_star_score)) +
+  geom_boxplot() +
+  labs(title = "Energy STAR Scores by Borough",
+       x = "Borough",
+       y = "Energy Score")
+
+ggplotly(scores_by_boro)
+
+#Manhattan has the highest/best STAR median score (for energy performance).
+#Bronx has the lowest median score. 
+
+emissions_by_boro <- ggplot(filtered_data, aes(x = borough, y = total_location_based_ghg_emissions_metric_tons_co2e)) +
+  geom_boxplot() +
+  labs(title = "GHG Emissions by Borough",
+       x = "Borough",
+       y = "Total Location-Based GHG Emissions (Metric Tons CO2e)") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0, 1000))
+
+ggplotly(emissions_by_boro)
+
+#Although STAR median scores vary per borough, median quantity of emissions per
+#borough is much more similar. Therefore, high STAR scores don't necessarily 
+#mean a property generates less emissions. 
+```
+```{r}
+scores_by_property <- ggplot(filtered_data, aes(x = property_category, 
+                                                y = energy_star_score)) +
+  geom_boxplot() +
+  labs(title = "Energy Scores by Property Category",
+       x = "Property Type",
+       y = "Energy Score")
+
+ggplotly(scores_by_property)
+
+#note how commercial has the highest (best) energy STAR scores for energy performance.
+
+emissions_by_property <- ggplot(filtered_data, aes(x = property_category, 
+                                                   y = total_location_based_ghg_emissions_metric_tons_co2e)) +
+  geom_boxplot() +
+  labs(title = "GHG Emissions by Property Category",
+       x = "Property Category",
+       y = "Total Location-Based GHG Emissions (Metric Tons CO2e)") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0, 1000))
+
+ggplotly(emissions_by_property)
+
+#though commercial's median is slightly greater than the "other" and residential 
+#categories, NYC commercial properties still have the highest median emissions.
+
+#this also shows that having good energy performance doesn't mean lower emissions.
+```
+
+```{r}
+hist_ghg_emissions <- hist(filtered_data$total_location_based_ghg_emissions_metric_tons_co2e,
+     main = "Histogram of GHG Emissions",
+     xlab = "Total GHG Emissions (Metric Tons CO2e)",
+     col = "pink",
+     border = "black")
+
+#Roughly 2,000 properties generate 0 - 50,000 metric tons worth of emissions.  
+```
+
+```{r}
+hist(filtered_data$energy_star_score,
+     main = "Histogram of Energy STAR Scores Across ALL Property Categories",
+     xlab = "Energy STAR Scores",
+     col = "lightblue",
+     border = "black")
+
+#More than 300 properties (across all categories) have STAR scores from 90 - 100.
+```
+
+## Bi/Multivariate
+
+Include at least two multivariate EDA approaches. Write at least a sentence interpreting your findings from each of the two multivariate approaches.
+
+```{r}
+ggplot(filtered_data, aes(x = energy_star_score, 
+                          y = total_location_based_ghg_emissions_metric_tons_co2e)) +
+  geom_point(alpha = 0.6) +  
+  geom_smooth(method = "lm", se = FALSE, color = "red") + # Linear regression line
+  labs(title = "GHG Emissions vs. Energy Score",
+       x = "Energy Star Score",
+       y = "Total Location-Based GHG Emissions (Metric Tons CO2e)") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0, 6000))  
+
+#we see lots of parallel low and high emissions across the entire range of scores
+#although visibly negative, the regression line is still relatively flat.
+
+#these findings show that emissions and scores have a weak relationship
+
+#correlation between scores and emissions ONLY: 
+cor_scores_emissions <- 
+  cor(filtered_data[, c("energy_star_score", 
+                        "total_location_based_ghg_emissions_metric_tons_co2e")]) |> 
+  knitr::kable(
+              align = "cc", 
+              digits = 3) |> 
+  kable_styling()
+
+cor_scores_emissions
+
+#the weak correlation between the two variables shows that as scores increase, 
+#emissions don't tend to increase with them
+```
+
+```{r}
+gas_use_by_property <- filtered_data |>
+  group_by(property_category) |>
+  summarize(mean_gas_use = mean(natural_gas_use_k_btu, na.rm = TRUE))
+
+bars_gas_by_property <- ggplot(gas_use_by_property, aes(x = property_category, y = mean_gas_use)) +
+  geom_bar(stat = "identity", fill = "red") + 
+  labs(title = "Average Natural Gas Use by Property Type",
+       x = "Property Type",
+       y = "Average Natural Gas Use (kBtu)") +
+  theme_minimal() 
+
+bars_with_black_label <- ggplotly(bars_gas_by_property) %>%
+  layout(
+    hoverlabel = list(
+      font = list(color = "black"),  # Set text color
+      bgcolor = "white"              # Set background color
+    )
+  )
+
+bars_with_black_label
+
+#Residential properties use significantly more natural gas than commercial ones.
+#This isn't surprising since residential properties primarily rely on gas heating, 
+#while commercial properties rely more on electricity. 
+```
+
+# Regression Analysis
+
+Write out some thoughtful prose here describing how the EDA above informed your analytic approach. Be sure to mention if/how your data cleaning steps affected your EDA and subsequent analysis (e.g. missing data).
+
+Implement at least one regression analysis with at least one outcome and two covariates in the model, as described above.
+
+Run one assumption check on your regression output.
+
+```{r}
+# fit check
+fit_filtered_data <- lm(total_location_based_ghg_emissions_metric_tons_co2e ~ 1 +
+                          weather_normalized_source_energy_use_k_btu * 
+                          natural_gas_use_k_btu *
+                          property_gfa_self_reported_ft,
+                        data = filtered_data)
+
+summary(fit_filtered_data)
+
+#IMPORTANT FINDINGS
+
+#since the interaction between weather-normalized energy use and natural gas use 
+#has a p-value of (0.37731), it does not significantly affect GHG emissions above 
+#and beyond their individual effects.
+
+#I didn't need to pivot my data wider, but I mutated the property type variable 
+#so that I could break down and analyze scores and emissions across all property 
+#types into three categories. This gave me insight into my second sub question 
+#(which I discussed in that code chunk).
+
+#While I made an effort to choose variables with lots of available data, it is 
+#possible that the pieces of missing data could alter my findings. As I mentioned 
+#earlier, natural gas was the one source type with the most available observations. 
+#Other types had little to no available values. Had enough values for those types 
+#been recorded, I would have done a side-by-side bar chart on types of energy 
+#sources by the three property categories to provide some more nuanced findings. 
+
+#I would have added other source types to my linear model to better specify it. 
+#I think my model would suggest that those types, such as fuel, have more 
+#statistical significance on emissions (that they are stronger predictors of 
+#emissions than natural gas). Since I would be adding more relevant predictors, 
+#this would also decrease my omitted variable bias.
+
+fit_filtered_data <- lm(total_location_based_ghg_emissions_metric_tons_co2e ~ 1 +
+                          weather_normalized_source_energy_use_k_btu * 
+                          natural_gas_use_k_btu *
+                          property_gfa_self_reported_ft,
+                        data = filtered_data)
+
+residuals_df <- data.frame(residuals_fit = residuals(fit_filtered_data))
+
+bp_test <- lmtest::bptest(fit_filtered_data)
+
+bp_table <- bp_test |>
+  tidy() |> 
+  mutate(across(where(is.numeric), ~ round(., 5))) |>
+  rename(degrees_freedom = parameter) |> 
+  kable("html", caption = "BP test (Null is Homoskedasticity)") |>
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+
+bp_table
+
+augmented_data <- filtered_data |>
+  modelr::add_residuals(fit_filtered_data, var = "residual") |>
+  modelr::add_predictions(fit_filtered_data, var = "prediction")
+
+resid_fv <- ggplot(augmented_data, aes(x = prediction, y = residual)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs. Fitted Values",
+       x = "Fitted Values",
+       y = "Residuals")
+
+resid_fv 
+   
+summary(fit_filtered_data)
+```
+
+Finally, write a simple interpretation of the result of your regression analysis in light of your motivating questions/hypotheses.
+
+```{r}
+#All three main predictors are statistically significant (p < 0.05), indicating 
+#that they have meaningful contributions to GHG emissions.
+
+#Weather-normalized source energy use has the strongest effect (beta = 4.28e-05, 
+#p < 2e-16), suggesting that as a building consumes more energy, emissions 
+#increase substantially.
+
+#R-squared = 0.9989 suggests that the model explains nearly all variation in emissions.
+#HOWEVER, I'm sure this has to do with heteroskedasticity, which is clearly present 
+#in my linear model. We also see that the p-value is extremely low, so we 
+#reject the null hypothesis that the model is homoskedastic. 
+#Visually, we see only two points align with the fitted values. 
+
+#My model is highly underspecified (I only put 3 predictors) since there are 
+#many more factors that contribute to emissions. It is a nuanced and complex subject. 
+#I also did not change any predictor's functional form. 
+
+#I established that there is a weak relationship between energy STAR scores and 
+#emissions by testing the correlation (which is only -0.108) and graphing a 
+#scatterplot with a linear regression running through the points.
+```

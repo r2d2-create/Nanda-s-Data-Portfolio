@@ -1,0 +1,583 @@
+---
+title: "jhmc assignment #2 - Mutating, Labelling, GLM Regressions, Factoring, Relevelling, Renaming, etc."
+output: html_document
+date: "2025-06-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(DescTools)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(readxl)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+# import the June dataset
+
+```{r cars}
+june_27 <- read_csv("/Users/-n/Desktop/R files/6.27.2025_HRSN and Readmit Dataset with LOS for ND.csv", show_col_types = FALSE) |>
+  janitor::clean_names()
+```
+
+# Acuity of Admissions Rate
+
+```{r}
+june_27 |>
+  summarize(
+  aa_rate = mean(june_27$acuity_of_admission == 3), na.rm = TRUE
+  )
+
+table(june_27$acuity_of_admission)
+```
+
+# Recode different comorbidities & comorbidity rates
+
+```{r}
+june_27_updated <- 
+  june_27 |>
+  mutate(    #recode comorbidities
+    myocardial_recode = if_else(myocardial_infarction == 1, 1, 0),
+    cerebrovascular_recode = if_else(cerebrovascular_disease == 1,1, 0),
+    peripheral_vascular_recode = if_else(peripheral_vascular_disease == 1, 1, 0),
+    diabetes_no_complications_recode = if_else(diabetes_without_complications == 1, 1, 0),
+    heart_failure_recode = if_else(congestive_heart_failure == 1, 2, 0),
+    diabetes_organ_damage_recode = if_else(diabetes_with_end_organ_damage == 1, 2, 0),
+    pulmonary_recode = if_else(chronic_pulmonary_disease == 1, 2, 0),
+    weak_renal_recode = if_else(mild_liver_or_renal_disease == 1, 2, 0),
+    any_tumor_recode = if_else(any_tumor == 1, 2, 0),
+    dementia_recode = if_else(dementia == 1, 3, 0),
+    connective_issue_recode = if_else(connective_tissue_disease == 1, 3, 0),
+    aids_recode = if_else(aids == 1, 4, 0),
+    high_renal_recode = if_else(moderate_or_severe_liver_or_renal_disease == 1, 4, 0),
+    metastatic_tumor_recode = if_else(metastatic_solid_tumor == 1, 6, 0)
+  ) 
+
+view(june_27_updated)
+
+comorbidity_rates <- 
+  june_27_updated |>
+  summarize(
+    rate_myocardial = mean(myocardial_recode == 1, na.rm = TRUE),
+    rate_cerebrovascular = mean(cerebrovascular_recode == 1, na.rm = TRUE),
+    rate_peripheral_vascular = mean(peripheral_vascular_recode == 1, na.rm = TRUE),
+    rate_diabetes_no_complications = mean(diabetes_no_complications_recode == 1, na.rm = TRUE),
+    rate_heart_failure = mean(heart_failure_recode == 2, na.rm = TRUE),
+    rate_diabetes_organ_damage = mean(diabetes_organ_damage_recode == 2, na.rm = TRUE),
+    rate_pulmonary = mean(pulmonary_recode == 2, na.rm = TRUE),
+    rate_weak_renal = mean(weak_renal_recode == 2, na.rm = TRUE),
+    rate_any_tumor = mean(any_tumor_recode == 2, na.rm = TRUE),
+    rate_dementia = mean(dementia_recode == 3, na.rm = TRUE),
+    rate_connective_tissue = mean(connective_issue_recode == 3, na.rm = TRUE),
+    rate_aids = mean(aids_recode == 4, na.rm = TRUE),
+    rate_high_renal = mean(high_renal_recode == 4, na.rm = TRUE),
+    rate_metastatic_tumor = mean(metastatic_tumor_recode == 6, na.rm = TRUE)
+  )
+
+view(comorbidity_rates)
+```
+
+#summing comorbidity scores
+
+```{r}
+june_27_v3 <- june_27_updated |>
+  rowwise() |>
+  mutate(
+    total_comorbidity_score = sum(
+      myocardial_recode,
+      cerebrovascular_recode,
+      peripheral_vascular_recode,
+      diabetes_no_complications_recode,
+      heart_failure_recode,
+      diabetes_organ_damage_recode,
+      pulmonary_recode,
+      weak_renal_recode,
+      any_tumor_recode,
+      dementia_recode,
+      connective_issue_recode,
+      aids_recode,
+      high_renal_recode,
+      metastatic_tumor_recode,
+      na.rm = TRUE
+    ),
+    Box_C_Score = if_else(total_comorbidity_score < 4, total_comorbidity_score, 5)
+  ) |>
+  ungroup()
+
+"total_comorbidity_score" %in% colnames(june_27_v3)
+```
+
+# emergency department use
+
+```{r}
+june_27_v4 <- june_27_v3 |>
+  mutate(
+    er_in_the_previous_six_months = as.numeric(er_in_the_previous_six_months),
+    Box_E_Score = pmin(er_in_the_previous_six_months, 4)
+  )
+```
+
+# los scores
+
+```{r}
+june_27_v5 <- june_27_v4 |>
+  mutate(
+    l_score = case_when(
+      los == 1 ~ 1,
+      los == 2 ~ 2,
+      los == 3 ~ 3,
+      los >= 4 & los <= 6 ~ 4,
+      los >= 7 & los <= 13 ~ 5,
+      los >= 14 ~ 7,
+      TRUE ~ NA_real_
+    )
+  )
+```
+
+# LACE scores
+
+```{r}
+june_27_v6 <- june_27_v5 |>
+  rowwise() |>
+  mutate(
+    LACE_score = sum(l_score, acuity_of_admission, Box_E_Score, Box_C_Score)
+  ) |>
+  select(LACE_score)
+
+"LACE_score" %in% colnames(june_27_v6)
+```
+
+# import the 3 sheets & combine them
+
+```{r}
+sheet_1 <- readxl::read_xlsx("/Users/-n/Desktop/R files/rE_56475_1.xlsx") |>
+  janitor::clean_names()
+
+sheet_2 <- readxl::read_xlsx("/Users/-n/Desktop/R files/rE_56475_2.xlsx") |>
+  janitor::clean_names()
+
+sheet_3 <- readxl::read_xlsx("/Users/-n/Desktop/R files/rE_56475_3.xlsx") |>
+  janitor::clean_names()
+
+sheet_combo <- bind_rows(sheet_1, sheet_2, sheet_3)
+```
+
+# COMBO - OMB combined race & ethnicity
+
+```{r}
+"ethnic_background" %in% colnames(sheet_combo) #this helped me confirm that ethnicity has a different name in the new sheets
+
+combo_omb_races <-
+  sheet_combo |>
+  mutate(
+    OMB_combined_race_and_ethnicity = case_when(
+      race == "White" & ethnic_background_final != "Hispanic or Latino" ~ "White",
+      race == "Black or African American" & ethnic_background_final != "Hispanic or Latino" ~ "Black or African American",
+      race == "Asian" ~ "Asian",
+      race == "White" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic/Latino",
+      race == "Black or African American" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic/Latino",
+      race == "American Indian or Alaska Native" ~ "American Indian or Alaska Native",
+      race == "Native Hawaiian or Other Pacific Islander" ~ "Native Hawaiian or Pacific Islander",
+      race == "Two or More Races" ~ "Two or More Races",
+      race == "Some Other Race" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic or Latino", 
+      race == "Some Other Race" & ethnic_background_final != "Hispanic or Latino" ~ "Some Other Race", 
+      race == "Unknown" & ethnic_background_final != "Hispanic or Latino" ~ "Unknown",
+      race == "Unknown" & ethnic_background_final == "Hispanic or Latino" ~ "Hispanic or Latino"
+    )
+  ) 
+
+combo_omb_races
+```
+
+# COMBO - Ages
+
+```{r}
+ages <- 
+  combo_omb_races |>
+  mutate(Age_Range = case_when(
+    age >= 0 & age <= 17 ~ "0 - 17", 
+    age >= 18 & age <= 24 ~ "18 - 24", 
+    age >= 25 & age <= 44 ~ "25 - 44", 
+    age >= 45 & age <= 61 ~ "45 - 61", 
+    age >= 62 & age <= 70 ~ "62 - 70", 
+    age >= 71 ~ "71+" 
+  ))
+
+ages
+```
+
+# COMBO - Insurance
+
+```{r}
+combo_insurance <-
+  ages |>
+  mutate(
+    Insurance_Type = case_when(
+      insurance_type == "HMO Medicaid" ~ "Medicaid", 
+      insurance_type == "Medicaid" ~ "Medicaid", 
+      insurance_type == "HMO Medicare" ~ "Medicare", 
+      insurance_type == "Medicare" ~ "Medicare", 
+      insurance_type == "Capitated Commercial" ~ "Commercial",
+      insurance_type == "Capitated Medicaid" ~ "Medicaid",
+      insurance_type == "Capitated Medicare" ~ "Medicare",
+      insurance_type == "Commercial" ~ "Commercial",
+      insurance_type == "Self-Pay" ~ "Other",
+      insurance_type == "Workers Comp/No Fault" ~ "Other",
+      insurance_type == "Other" ~ "Other"
+    )) 
+
+combo_insurance
+```
+
+# COMBO - Languages
+
+```{r}
+combo_insurance$language <- as.character(combo_insurance$language)
+
+most_common_languages <- 
+  combo_insurance |>
+  count(language, sort = TRUE) |>
+  slice_head(n = 5)
+
+most_common_languages
+
+language_groupings <-
+  combo_insurance |>
+  mutate(Preferred_Language = case_when(
+    language == "English" ~ "Top 5 language", 
+    language == "Spanish" ~ "Top 5 language", 
+    language == "Chinese-Mandarin" ~ "Top 5 language", 
+    language == "Bengali" ~ "Top 5 language", 
+    language == "Korean" ~ "Top 5 language", 
+    TRUE ~ "Other"
+  )) 
+
+language_groupings
+```
+# COMBO - Recode different comorbidities & comorbidity rates
+
+```{r}
+combo_updated <- 
+  language_groupings |>
+  mutate(    #recode comorbidities
+    myocardial_recode = if_else(myocardial_infarction == 1, 1, 0),
+    cerebrovascular_recode = if_else(cerebrovascular_disease == 1,1, 0),
+    peripheral_vascular_recode = if_else(peripheral_vascular_disease == 1, 1, 0),
+    diabetes_no_complications_recode = if_else(diabetes_without_complications == 1, 1, 0),
+    heart_failure_recode = if_else(congestive_heart_failure == 1, 2, 0),
+    diabetes_organ_damage_recode = if_else(diabetes_with_end_organ_damage == 1, 2, 0),
+    pulmonary_recode = if_else(chronic_pulmonary_disease == 1, 2, 0),
+    weak_renal_recode = if_else(mild_liver_or_renal_disease == 1, 2, 0),
+    any_tumor_recode = if_else(any_tumor == 1, 2, 0),
+    dementia_recode = if_else(dementia == 1, 3, 0),
+    connective_issue_recode = if_else(connective_tissue_disease == 1, 3, 0),
+    aids_recode = if_else(aids == 1, 4, 0),
+    high_renal_recode = if_else(moderate_or_severe_liver_or_renal_disease == 1, 4, 0),
+    metastatic_tumor_recode = if_else(metastatic_solid_tumor == 1, 6, 0)
+  ) 
+
+combo_comorbidity_rates <- 
+  combo_updated |>
+  summarize(
+    rate_myocardial = mean(myocardial_recode == 1, na.rm = TRUE),
+    rate_cerebrovascular = mean(cerebrovascular_recode == 1, na.rm = TRUE),
+    rate_peripheral_vascular = mean(peripheral_vascular_recode == 1, na.rm = TRUE),
+    rate_diabetes_no_complications = mean(diabetes_no_complications_recode == 1, na.rm = TRUE),
+    rate_heart_failure = mean(heart_failure_recode == 2, na.rm = TRUE),
+    rate_diabetes_organ_damage = mean(diabetes_organ_damage_recode == 2, na.rm = TRUE),
+    rate_pulmonary = mean(pulmonary_recode == 2, na.rm = TRUE),
+    rate_weak_renal = mean(weak_renal_recode == 2, na.rm = TRUE),
+    rate_any_tumor = mean(any_tumor_recode == 2, na.rm = TRUE),
+    rate_dementia = mean(dementia_recode == 3, na.rm = TRUE),
+    rate_connective_tissue = mean(connective_issue_recode == 3, na.rm = TRUE),
+    rate_aids = mean(aids_recode == 4, na.rm = TRUE),
+    rate_high_renal = mean(high_renal_recode == 4, na.rm = TRUE),
+    rate_metastatic_tumor = mean(metastatic_tumor_recode == 6, na.rm = TRUE)
+  )
+```
+
+# COMBO - summing comorbidity scores
+
+```{r}
+combo_v3 <- combo_updated |>
+  rowwise() |>
+  mutate(
+    total_comorbidity_score = sum(
+      myocardial_recode,
+      cerebrovascular_recode,
+      peripheral_vascular_recode,
+      diabetes_no_complications_recode,
+      heart_failure_recode,
+      diabetes_organ_damage_recode,
+      pulmonary_recode,
+      weak_renal_recode,
+      any_tumor_recode,
+      dementia_recode,
+      connective_issue_recode,
+      aids_recode,
+      high_renal_recode,
+      metastatic_tumor_recode,
+      na.rm = TRUE
+    ),
+    Box_C_Score = if_else(total_comorbidity_score < 4, total_comorbidity_score, 5)
+  ) |>
+  ungroup()
+
+"total_comorbidity_score" %in% colnames(combo_v3)
+```
+
+# COMBO - emergency department use
+
+```{r}
+combo_v4 <- combo_v3 |>
+  mutate(
+    er_in_the_previous_six_months = as.numeric(er_in_the_previous_six_months),
+    Box_E_Score = pmin(er_in_the_previous_six_months, 4)
+  )
+```
+
+# COMBO - Length of Stay (LOS) scores
+
+```{r}
+combo_v5 <- combo_v4 |>
+  mutate(
+    LOS_score = case_when(
+      los == 1 ~ 1,
+      los == 2 ~ 2,
+      los == 3 ~ 3,
+      los >= 4 & los <= 6 ~ 4,
+      los >= 7 & los <= 13 ~ 5,
+      los >= 14 ~ 7
+    )
+  )
+```
+
+# COMBO - LACE scores
+
+```{r}
+combo_v6 <- 
+  combo_v5 |>
+  rename(Acuity_of_Admission = acuity_of_admission) |>
+  mutate(
+    LACE_score = LOS_score + Acuity_of_Admission + Box_E_Score + Box_C_Score,
+    readmit_binary = case_when(
+      readmit_in_30_days == "1" ~ 1,
+      readmit_in_30_days == "NULL" ~ 0
+    ), 
+    LACE_score_binary = case_when(
+      LACE_score <= 9 ~ "Low Risk", 
+      LACE_score >= 10 ~ "High Risk"
+    )
+  )
+
+view(combo_v6)
+
+class(combo_v5$Insurance_Type)
+
+"LACE_score" %in% colnames(combo_v6)
+```
+
+# regression of Readmit by LACE Score
+
+```{r}
+combo_v6$LACE_score_binary <- factor(combo_v6$LACE_score_binary, ordered = FALSE)
+combo_v6$LACE_score_binary <- relevel(combo_v6$LACE_score_binary, ref = "Low Risk")
+
+combo_v6$readmit_binary <- factor(combo_v6$readmit_binary, ordered = FALSE)
+combo_v6$readmit_binary <- relevel(combo_v6$readmit_binary, ref = "0")
+
+class(combo_v6$LACE_score_binary)
+class(combo_v6$readmit_binary)
+
+readmit_by_LACE <- glm(readmit_binary ~ 
+                        LACE_score_binary,
+                        data = combo_v6, family = "binomial")
+readmit_by_LACE
+
+tab_model(readmit_by_LACE, collapse.ci = TRUE)
+```
+
+#when I predict LACE score by Readmit, it works. This is how I initially interpreted the prompt.
+```{r}
+LACE_by_readmit <- glm(LACE_score ~ 1 +
+                        readmit_in_30_days,
+                        data = combo_v6)
+
+summary(LACE_by_readmit)
+```
+
+# regression of Readmit by LACE Score, OMB Race and Ethnicity, Age Group, Insurance Type, Preferred Language 
+
+```{r}
+combo_v6$LACE_score_binary <- factor(combo_v6$LACE_score_binary, ordered = FALSE)
+combo_v6$LACE_score_binary <- relevel(combo_v6$LACE_score_binary, ref = "Low Risk")
+
+combo_v6$readmit_binary <- factor(combo_v6$readmit_binary, ordered = FALSE)
+combo_v6$readmit_binary <- relevel(combo_v6$readmit_binary, ref = "0")
+
+combo_v6$LOS_score <- factor(combo_v6$LOS_score, ordered = FALSE)
+combo_v6$LOS_score <- relevel(combo_v6$LOS_score, ref = "1")
+
+combo_v6$Insurance_Type <- factor(combo_v6$Insurance_Type, ordered = FALSE)
+combo_v6$Insurance_Type <- relevel(combo_v6$Insurance_Type, ref = "Commercial")
+
+combo_v6$Age_Range <- factor(combo_v6$Age_Range, ordered = FALSE)
+combo_v6$Age_Range <- relevel(combo_v6$Age_Range, ref = "45 - 61")
+
+combo_v6$Preferred_Language <- factor(combo_v6$Preferred_Language, ordered = FALSE)
+combo_v6$Preferred_Language <- relevel(combo_v6$Preferred_Language, ref = "Top 5 language")
+
+readmit_by_many_vars <- glm(readmit_binary ~ 1 + 
+                             LACE_score + LOS_score + Insurance_Type + Age_Range + Preferred_Language,
+                           data = combo_v6, family = "binomial")
+
+readmit_by_many_vars
+
+tab_model(readmit_by_many_vars, collapse.ci = TRUE)
+```
+
+# Regressions with the subcomponents of the LACE scores
+
+```{r}
+# As shown in a previous chunk, the LACE score is comprised of Acuity of Admissions, the Box C Score, the Box E Score, and the Length of Stay. Below, I will remove LACE_score and put each of the subcomponents into new models to isolate their effects on a patient's readmission to JHMC. 
+
+# assign labels to the Box C Score
+
+combo_v6$Box_C_Score <- if_else(
+  combo_v6$total_comorbidity_score < 4, 
+  "Low Comorbidity", 
+  "High Comorbidity"
+)
+
+# factor the Box C Score
+
+combo_v6$Box_C_Score <- factor(combo_v6$Box_C_Score, levels = c("Low Comorbidity", "High Comorbidity")
+)
+
+# relevel the Box C Score
+
+combo_v6$Box_C_Score <- relevel(combo_v6$Box_C_Score, ref = "Low Comorbidity")
+
+
+
+# ensure that the Box E Score is properly defined in the combo_v6 dataframe
+
+combo_v6$Box_E_Score <- pmin(combo_v6$er_in_the_previous_six_months, 4)
+
+# assign labels to the Box E Score
+
+combo_v6$Box_E_Score <- if_else(
+  combo_v6$Box_E_Score < 4,
+  "Patient visited the ED 0-3 times in the last 6 months",
+  "Patient visited the ED 4 or more in the last 6 months"
+)
+
+# factor the Box E Score
+
+combo_v6$Box_E_Score <- 
+  factor(combo_v6$Box_E_Score, levels = c("Patient visited the ED 0-3 times in the last 6 months", "Patient visited the ED 4 or more in the last 6 months")
+)
+
+# relevel the Box E Score
+
+combo_v6$Box_E_Score <- relevel(combo_v6$Box_E_Score, ref = "Patient visited the ED 0-3 times in the last 6 months")
+
+
+
+# assign labels to Acuity of Admission
+
+combo_v6$Acuity_of_Admission <- case_when(
+  combo_v6$Acuity_of_Admission == 0 ~ "Patient was NOT admitted to JHMC via the ED",
+  combo_v6$Acuity_of_Admission == 3 ~ "Patient was admitted to JHMC via the ED"
+)
+
+# factor the Acuity of Admission
+
+combo_v6$Acuity_of_Admission <- 
+  factor(combo_v6$Acuity_of_Admission, levels = c("Patient was NOT admitted to JHMC via the ED", "Patient was admitted to JHMC via the ED")
+)
+
+# relevel the Acuity of Admission
+
+combo_v6$Acuity_of_Admission <- relevel(combo_v6$Acuity_of_Admission, ref = "Patient was NOT admitted to JHMC via the ED")
+
+
+
+# regression with Acuity of Admission
+
+readmit_by_many_vars_Acuity_only <- glm(readmit_binary ~ 1 + 
+                             Acuity_of_Admission + Insurance_Type + Age_Range + Preferred_Language,
+                           data = combo_v6, family = "binomial")
+
+readmit_by_many_vars_Acuity_only
+
+
+# regression with Box C Score
+
+readmit_by_many_vars_C_only <- glm(readmit_binary ~ 1 + 
+                             Box_C_Score + Insurance_Type + Age_Range + Preferred_Language,
+                           data = combo_v6, family = "binomial")
+
+readmit_by_many_vars_C_only
+
+
+# regression with Box E Score
+
+readmit_by_many_vars_E_only <- glm(readmit_binary ~ 1 + 
+                             Box_E_Score + Insurance_Type + Age_Range + Preferred_Language,
+                           data = combo_v6, family = "binomial")
+
+readmit_by_many_vars_E_only
+
+
+# regression with Length of Stay
+
+readmit_by_many_vars_LOS_only <- glm(readmit_binary ~ 1 + 
+                             LOS_score + Insurance_Type + Age_Range + Preferred_Language,
+                           data = combo_v6, family = "binomial")
+
+readmit_by_many_vars_LOS_only
+```
+
+
+# Forest Plot showing each predictor's odd's ratios (inlcuding ALL LACE Score subcomponents)
+
+```{r}
+
+# create a sixth model with all the subcomponents + other predictors
+
+readmit_by_many_vars_ALL_subcomponents <- glm(readmit_binary ~ 1 + 
+                             Acuity_of_Admission + Box_E_Score + Box_C_Score + LOS_score + Insurance_Type + Age_Range + Preferred_Language,
+                           data = combo_v6, family = "binomial")
+
+readmit_by_many_vars_ALL_subcomponents
+
+# create the actual plot
+
+plot_model(readmit_by_many_vars_ALL_subcomponents,
+           transform = "exp",      
+           show.values = TRUE,     
+           value.offset = 0.5,     
+           colors = "black") +      
+  theme_minimal() +
+  labs(title = "Logistic Regression Odds Ratios with 95% CI",
+       x = "Predictors",
+       y = "Odds Ratio") #IMPORTANT! For some reason, R gives me the correct output when I code the labels this way, but "Predictors" should really be in the Y axis and "Odds Ratio" in the X axis. 
+
+# NOTE - If the odds ratio is greater than one and its confidence interval does not pass through 1, then the predictor is strongly associated with higher odds of the outcome. If the odds ratio is less than 1, the predictor is more weakly associated.
+
+# RESULTS
+
+# Having 4 or more ED visits in the past 6 months appears to be the strongest predictor associated with higher odds of hospital readmission, followed by having a high comorbidity and Medicare enrollment. These are not surprising at all. Additionally, it makes sense that the lowest age range has the lowest odds ratio -- in some health studies I've read, children and adolescents usually display lower rates of health conditions. 
+
+# However, I am surprised to see that a LOS score of 7 (the longest LOS) does not exceed 1 (the null effect) -- theoretically, I would think that since the longer the LOS, the sicker the patient is and would therefore be more likely to be readmitted. 
+```
+
