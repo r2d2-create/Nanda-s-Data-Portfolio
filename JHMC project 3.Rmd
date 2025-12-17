@@ -1,5 +1,5 @@
 ---
-title: "JHMC proj 2 - DAGs,"
+title: "JHMC project 3 - DAGs and some foundations of causal inference,"
 output: pdf_document
 date: "2025-10-02"
 ---
