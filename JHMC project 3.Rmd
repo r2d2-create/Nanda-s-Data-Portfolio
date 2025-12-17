@@ -1,6 +1,6 @@
 ---
 title: "JHMC project 3 - DAGs and some foundations of causal inference,"
-output: pdf_document
+output: html_document
 date: "2025-10-02"
 ---
 
