@@ -1,5 +1,5 @@
 ---
-title: "jhmc assignment #2 - Mutating, Labelling, GLM Regressions, Factoring, Relevelling, Renaming, etc."
+title: "JHMC project 2 - Mutating, Labelling, GLM Regressions, Factoring, Relevelling, Renaming, etc."
 output: html_document
 date: "2025-06-27"
 ---
