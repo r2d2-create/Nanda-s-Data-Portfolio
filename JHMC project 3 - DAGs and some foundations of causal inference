@@ -22,6 +22,12 @@ library(estimatr)
 library(ri2)
 ```
 
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
 # import the 3 sheets & combine them
 
 ```{r}
@@ -509,5 +515,4 @@ summary(match1)
 # you want a strict caliper because you want your groups to be similar, but the caliper should not be so strict that you have a large portion of unmatched cases
 
 #if I were to graph the size of the caliper (X axis) against the no. of UNmatched cases (Y axis) in group 2, I would see a negative exponential curve.
-```
 
