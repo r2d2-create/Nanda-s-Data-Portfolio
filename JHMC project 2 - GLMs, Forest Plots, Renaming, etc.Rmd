@@ -559,7 +559,8 @@ readmit_by_many_vars_ALL_subcomponents
 plot_model(readmit_by_many_vars_ALL_subcomponents,
            transform = "exp",      
            show.values = TRUE,     
-           value.offset = 0.5,     
+           value.offset = 0.5, 
+           value.size = 3,
            colors = "black") +      
   theme_minimal() +
   labs(title = "Logistic Regression Odds Ratios with 95% CI",
