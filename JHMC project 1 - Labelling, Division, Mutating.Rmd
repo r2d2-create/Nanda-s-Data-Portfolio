@@ -196,7 +196,7 @@ june_ages <-
 june_ages
 ```
 
-## june hospital-service filters - WHAT DOES "ALL PATIENTS" REFERS TO?
+
 
 ```{r}
 df_june_hospital_service <-
@@ -220,7 +220,7 @@ df_june_hospital_service <-
 df_june_hospital_service
 ```
 
-## can language groupings be automated (May)?
+
 
 ```{r}
 most_common_languages <- 
